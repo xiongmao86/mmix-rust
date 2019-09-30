@@ -22,12 +22,9 @@ impl Index<u64> for M {
 }
 // Instruction code
 fn signed_load_byte(memory: M, address: u64) -> u64 {
-    let byte: u64 = memory[address].into();
-    if byte & 0x80 != 0x00 {
-        byte | 0xff_ff_ff_00u64 
-    } else {
-        byte | 0x00_00_00_00u64
-    }
+    let b = memory[address];
+    let i: i64 = (b as i8).into();
+    i as u64
 }
 
 #[cfg(test)]
@@ -49,7 +46,7 @@ mod tests {
 
     #[test]
     fn test_signed_load_byte() {
-        assert_eq!(signed_load_byte(M, 1002), 0x00_00_00_45);
-        assert_eq!(signed_load_byte(M, 1004), 0xff_ff_ff_89);
+        assert_eq!(signed_load_byte(M, 1002), 0x00_00_00_00_00_00_00_45, "should lead with zero.");
+        assert_eq!(signed_load_byte(M, 1004), 0xff_ff_ff_ff_ff_ff_ff_89, "should lead with one.");
     }
 }
