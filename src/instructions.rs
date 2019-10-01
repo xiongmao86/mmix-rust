@@ -96,6 +96,11 @@ fn unsigned_load_octa(memory: M, address: u64) -> u64 {
     memory.octa(address)
 }
 
+fn load_high_tetra(memory: M, address: u64) -> u64 {
+    let u: u64 = memory.tetra(address).into();
+    u << 32
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -224,6 +229,14 @@ mod tests {
         assert_eq!(
             unsigned_load_octa(M, 1004),
             0x01_23_45_67_89_ab_cd_ef
+        );
+    }
+
+    #[test]
+    fn test_load_high_tetra() {
+        assert_eq!(
+            load_high_tetra(M, 1001),
+            0x01_23_45_67_00_00_00_00
         );
     }
 }
