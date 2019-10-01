@@ -80,6 +80,22 @@ fn signed_load_octa(memory: M, address: u64) -> u64 {
     memory.octa(address)
 }
 
+fn unsigned_load_byte(memory: M, address: u64) -> u64 {
+    memory.byte(address).into()
+}
+
+fn unsigned_load_wyde(memory: M, address: u64) -> u64 {
+    memory.wyde(address).into()
+}
+
+fn unsigned_load_tetra(memory: M, address: u64) -> u64 {
+    memory.tetra(address).into()
+}
+
+fn unsigned_load_octa(memory: M, address: u64) -> u64 {
+    memory.octa(address)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -184,6 +200,29 @@ mod tests {
     fn test_signed_load_octa() {
         assert_eq!(
             signed_load_octa(M, 1006),
+            0x01_23_45_67_89_ab_cd_ef
+        );
+    }
+
+    #[test]
+    fn test_unsigned_load() {
+        assert_eq!(
+            unsigned_load_byte(M, 1005),
+            0x00_00_00_00_00_00_00_ab
+        );
+
+        assert_eq!(
+            unsigned_load_wyde(M, 1007),
+            0x00_00_00_00_00_00_cd_ef
+        );
+
+        assert_eq!(
+            unsigned_load_tetra(M, 1006),
+            0x00_00_00_00_89_ab_cd_ef
+        );
+
+        assert_eq!(
+            unsigned_load_octa(M, 1004),
             0x01_23_45_67_89_ab_cd_ef
         );
     }
