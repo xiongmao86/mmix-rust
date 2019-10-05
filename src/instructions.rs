@@ -20,12 +20,17 @@ impl Memory for HashMemory {
 
 trait Memory {
     fn get(&self, index: u64) -> u8;
+
+    fn index(&self, address: u64, byte_count: u64) -> u64 {
+        address - address % byte_count
+    }
+
     fn load_byte(&self, address: u64) -> u8 {
         self.get(address)
     }
 
     fn load_wyde(&self, address: u64) -> u16 {
-        let k = address - address % 2;
+        let k = self.index(address, 2);
         let mut s = 0u16;
         for i in 0..2 {
             let b: u16 = self.get(k+i).into();
@@ -35,7 +40,7 @@ trait Memory {
     }
 
     fn load_tetra(&self, address: u64) -> u32 {
-        let k = address - address % 4;
+        let k = self.index(address, 4);
         let mut s = 0u32;
         for i in 0..4 {
             let b: u32 = self.get(k+i).into();
@@ -45,7 +50,7 @@ trait Memory {
     }
 
     fn load_octa(&self, address: u64) -> u64 {
-        let k = address - address % 8;
+        let k = self.index(address, 8);
         let mut s = 0u64;
         for i in 0..8 {
             let b: u64 = self.get(k+i).into();
