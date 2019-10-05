@@ -16,10 +16,15 @@ impl Memory for HashMemory {
     fn get(&self, index: u64) -> u8 {
         *self.0.get(&index).unwrap_or(&0x00u8)
     }
+
+    fn set(&mut self, index: u64, data: u8) {
+        self.0.insert(index, data);
+    }
 }
 
 trait Memory {
     fn get(&self, index: u64) -> u8;
+    fn set(&mut self, index: u64, data: u8);
 
     fn index(&self, address: u64, byte_count: u64) -> u64 {
         address - address % byte_count
@@ -27,6 +32,10 @@ trait Memory {
 
     fn load_byte(&self, address: u64) -> u8 {
         self.get(address)
+    }
+
+    fn store_byte(&mut self, address: u64, data: u8) {
+        self.set(address, data)
     }
 
     fn load_wyde(&self, address: u64) -> u16 {
@@ -39,6 +48,14 @@ trait Memory {
         s
     }
 
+    fn store_wyde(&mut self, address: u64, data: u16) {
+        let BYTE_COUNT = 2;
+        let k = self.index(address, BYTE_COUNT);
+        for i in 0..BYTE_COUNT {
+            self.set(k+i, (data >> (8*(BYTE_COUNT-1-i))) as u8);
+        }
+    }
+
     fn load_tetra(&self, address: u64) -> u32 {
         let k = self.index(address, 4);
         let mut s = 0u32;
@@ -49,6 +66,14 @@ trait Memory {
         s
     }
 
+    fn store_tetra(&mut self, address: u64, data: u32) {
+        let BYTE_COUNT = 4;
+        let k = self.index(address, BYTE_COUNT);
+        for i in 0..BYTE_COUNT {
+            self.set(k+i, (data >> (8*(BYTE_COUNT-1-i))) as u8);
+        }
+    }
+
     fn load_octa(&self, address: u64) -> u64 {
         let k = self.index(address, 8);
         let mut s = 0u64;
@@ -57,6 +82,14 @@ trait Memory {
             s = (s << 8) | b;
         }
         s
+    }
+
+    fn store_octa(&mut self, address: u64, data: u64) {
+        let BYTE_COUNT = 8;
+        let k = self.index(address, BYTE_COUNT);
+        for i in 0..BYTE_COUNT {
+            self.set(k+i, (data >> (8*(BYTE_COUNT-1-i))) as u8);
+        }
     }
 }
 
@@ -150,7 +183,7 @@ mod tests {
     }
 
     #[test]
-    fn test_memory_access() {
+    fn test_memory_load() {
         let m = memory_for_tests();
         assert_eq!(m.load_byte(999), 0x00u8);
         assert_eq!(m.load_byte(1002), 0x45u8);
@@ -160,7 +193,7 @@ mod tests {
     }
 
     #[test]
-    fn test_multibyte_memory_acess() {
+    fn test_multibyte_memory_load() {
         let m = memory_for_tests();
         let n = 1000;
 
@@ -183,6 +216,36 @@ mod tests {
         for i in 0..8 {
             assert_eq!(m.load_octa(n), m.load_octa(n + i));
         }
+    }
+
+    #[test]
+    fn test_memory_store_byte() {
+        let mut m = memory_for_tests();
+        m.store_byte(1002, 0x00u8);
+        assert_eq!(m.load_octa(1002), 0x01_23_00_67_89_ab_cd_efu64);
+    }
+
+    #[test]
+    fn test_memory_store_wyde() {
+        let mut m = memory_for_tests();
+        m.store_wyde(1002, 0x00_00u16);
+        assert_eq!(m.load_octa(1002), 0x01_23_00_00_89_ab_cd_efu64);
+    }
+
+    #[test]
+    fn test_memory_store_tetra() {
+        let mut m = memory_for_tests();
+        let EXPECT = 0xff_ff_00_00_89_ab_cd_efu64;
+        m.store_tetra(1002, 0xff_ff_00_00u32);
+        assert_eq!(m.load_octa(1002), EXPECT, "should be 0x{:x?}, but is 0x{:x?}", EXPECT, m.load_octa(1002));
+    }
+
+    #[test]
+    fn test_memory_store_octa() {
+        let mut m = memory_for_tests();
+        let EXPECT = 0xff_ff_ff_ff_ff_ff_00_00u64; 
+        m.store_octa(1002, 0xff_ff_ff_ff_ff_ff_00_00u64);
+        assert_eq!(m.load_octa(1002), EXPECT, "should be 0x{:x?}, but is 0x{:x?}", EXPECT, m.load_octa(1002));
     }
 
     #[test]
