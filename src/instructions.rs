@@ -22,6 +22,41 @@ impl Memory for HashMemory {
     }
 }
 
+macro_rules! create_load_fn {
+    (load_byte, u8, 1) => {
+        fn load_byte(&self, address: u64) -> u8 {
+            self.get(address)
+        }
+    };
+    ($name:ident, $ty:ty, $byte_count:literal) => {
+        fn $name(&self, address: u64) -> $ty {
+            let k = self.index(address, $byte_count);
+            let mut s: $ty = 0;
+            for i in 0..$byte_count {
+                let b: $ty = self.get(k+i).into();
+                s = (s << 8) |b;
+            }
+            s
+        }
+    };
+}
+
+macro_rules! create_store_fn {
+    (store_byte, u8, 1) => {
+        fn store_byte(&mut self, address: u64, data: u8) {
+            self.set(address, data)
+        }
+    };
+    ($name:ident, $ty:ty, $byte_count:literal) => {
+        fn $name(&mut self, address: u64, data: $ty) {
+            let k = self.index(address, $byte_count);
+            for i in 0..$byte_count {
+                self.set(k+i, (data >> (8*($byte_count-1-i))) as u8);
+            }
+        }
+    };
+}
+
 trait Memory {
     fn get(&self, index: u64) -> u8;
     fn set(&mut self, index: u64, data: u8);
@@ -30,67 +65,15 @@ trait Memory {
         address - address % byte_count
     }
 
-    fn load_byte(&self, address: u64) -> u8 {
-        self.get(address)
-    }
+    create_load_fn!(load_byte, u8, 1);
+    create_load_fn!(load_wyde, u16, 2);
+    create_load_fn!(load_tetra, u32, 4);
+    create_load_fn!(load_octa, u64, 8);
 
-    fn store_byte(&mut self, address: u64, data: u8) {
-        self.set(address, data)
-    }
-
-    fn load_wyde(&self, address: u64) -> u16 {
-        let k = self.index(address, 2);
-        let mut s = 0u16;
-        for i in 0..2 {
-            let b: u16 = self.get(k+i).into();
-            s = (s << 8) | b;
-        }
-        s
-    }
-
-    fn store_wyde(&mut self, address: u64, data: u16) {
-        let BYTE_COUNT = 2;
-        let k = self.index(address, BYTE_COUNT);
-        for i in 0..BYTE_COUNT {
-            self.set(k+i, (data >> (8*(BYTE_COUNT-1-i))) as u8);
-        }
-    }
-
-    fn load_tetra(&self, address: u64) -> u32 {
-        let k = self.index(address, 4);
-        let mut s = 0u32;
-        for i in 0..4 {
-            let b: u32 = self.get(k+i).into();
-            s = (s << 8) | b;
-        }
-        s
-    }
-
-    fn store_tetra(&mut self, address: u64, data: u32) {
-        let BYTE_COUNT = 4;
-        let k = self.index(address, BYTE_COUNT);
-        for i in 0..BYTE_COUNT {
-            self.set(k+i, (data >> (8*(BYTE_COUNT-1-i))) as u8);
-        }
-    }
-
-    fn load_octa(&self, address: u64) -> u64 {
-        let k = self.index(address, 8);
-        let mut s = 0u64;
-        for i in 0..8 {
-            let b: u64 = self.get(k+i).into();
-            s = (s << 8) | b;
-        }
-        s
-    }
-
-    fn store_octa(&mut self, address: u64, data: u64) {
-        let BYTE_COUNT = 8;
-        let k = self.index(address, BYTE_COUNT);
-        for i in 0..BYTE_COUNT {
-            self.set(k+i, (data >> (8*(BYTE_COUNT-1-i))) as u8);
-        }
-    }
+    create_store_fn!(store_byte, u8, 1);
+    create_store_fn!(store_wyde, u16, 2);
+    create_store_fn!(store_tetra, u32, 4);
+    create_store_fn!(store_octa, u64, 8);
 }
 
 // Instruction code
