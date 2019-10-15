@@ -3,6 +3,7 @@ use std::collections::HashMap;
 pub struct HashMemory(HashMap<u64, u8>);
 
 impl HashMemory {
+    #[allow(dead_code)]
     pub fn new() -> HashMemory {
         return HashMemory(HashMap::new())
     }
@@ -147,16 +148,16 @@ mod tests {
     #[test]
     fn test_memory_store_tetra() {
         let mut m = memory_for_tests();
-        let EXPECT = 0xff_ff_00_00_89_ab_cd_efu64;
+        let expect = 0xff_ff_00_00_89_ab_cd_efu64;
         m.store_tetra(1002, 0xff_ff_00_00u32);
-        assert_eq!(m.load_octa(1002), EXPECT, "should be 0x{:x?}, but is 0x{:x?}", EXPECT, m.load_octa(1002));
+        assert_eq!(m.load_octa(1002), expect, "should be 0x{:x?}, but is 0x{:x?}", expect, m.load_octa(1002));
     }
 
     #[test]
     fn test_memory_store_octa() {
         let mut m = memory_for_tests();
-        let EXPECT = 0xff_ff_ff_ff_ff_ff_00_00u64; 
+        let expect = 0xff_ff_ff_ff_ff_ff_00_00u64; 
         m.store_octa(1002, 0xff_ff_ff_ff_ff_ff_00_00u64);
-        assert_eq!(m.load_octa(1002), EXPECT, "should be 0x{:x?}, but is 0x{:x?}", EXPECT, m.load_octa(1002));
+        assert_eq!(m.load_octa(1002), expect, "should be 0x{:x?}, but is 0x{:x?}", expect, m.load_octa(1002));
     }
 }

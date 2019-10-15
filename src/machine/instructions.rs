@@ -54,11 +54,6 @@ fn load_high_tetra(memory: &dyn Memory, address: u64) -> u64 {
     u << 32
 }
 
-#[allow(dead_code)]
-fn load_address(memory: &dyn Memory, address: u64) -> u64 {
-    address
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -76,19 +71,6 @@ mod tests {
         m.insert(1006, 0xcdu8);
         m.insert(1007, 0xefu8);
         return HashMemory::from(m)
-    }
-
-    fn signed_setup() {
-        // $2 = 1000
-        // $3 = 2
-    }
-
-    #[test]
-    fn test_LDB() {
-        signed_setup();
-
-        // LDB $1, $2, $3
-        // assert $1 = 0x0000_0000_0000_0045
     }
 
     #[test]
@@ -183,19 +165,6 @@ mod tests {
         assert_eq!(
             load_high_tetra(&m, 1001),
             0x01_23_45_67_00_00_00_00
-        );
-    }
-
-    #[test]
-    fn test_load_address() {
-        let m = memory_for_tests();
-        assert_eq!(
-            load_address(&m, 2345u64),
-            2345u64
-        );
-        assert_eq!(
-            load_address(&m, 13579u64),
-            13579u64
         );
     }
 }

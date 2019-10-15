@@ -1,5 +1,4 @@
-mod instructions;
-mod memory;
+mod machine;
 
 fn main() {
     println!("Hello, world!");
