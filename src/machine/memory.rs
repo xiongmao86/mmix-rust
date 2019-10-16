@@ -8,6 +8,7 @@ impl HashMemory {
         return HashMemory(HashMap::new())
     }
 
+    #[cfg(tests)]
     pub fn from(map: HashMap<u64, u8>) -> HashMemory {
         return HashMemory(map)
     }
