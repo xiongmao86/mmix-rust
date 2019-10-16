@@ -6,12 +6,15 @@ struct Machine<T: Memory> {
     memory: T,
     general_registers: [u64; 256],
     special_registers: [u64; 32],
-    instructions: [InstFn; 256],
+    instructions: [InstFn<T>; 256],
 }
+
+type InstFn<T> = fn(&mut Machine<T>, u32);
 
 impl<T> Machine<T> where T: Memory {
     fn new(memory: T) -> Machine<T> {
-        let insts = [ dummy_inst as InstFn; 256];
+        let mut insts = [ Self::dummy_inst as InstFn<T>; 256];
+        insts[0x80] = Self::ldb as InstFn<T>;
         
         Machine {
             memory,
@@ -22,32 +25,37 @@ impl<T> Machine<T> where T: Memory {
     }
 
     fn execute(&mut self, inst: u32) {
-        let opcode = (inst >> 24 ) as u8;
-        match opcode {
-            0x80 => {
-                let x = (inst >> 16) as u8;
-                let y = (inst >> 8) as u8;
-                let z = inst as u8;
+        let opcode = ((inst >> 24 ) as u8) as usize;
+        self.instructions[opcode](self, inst);
+    }
 
-                let x: usize = x.into();
-                let y: usize = y.into();
-                let z: usize = z.into();
-                self.general_registers[x] = signed_load_byte(&self.memory, self.general_registers[y] + self.general_registers[z]);
-            },
-            _ => {}
-        }
+    fn dummy_inst(&mut self, _ops: u32) {}
+
+    fn ldb(&mut self, inst: u32) {
+        let (x, y, z) = three_operands(inst);
+        let address = self.general_registers[y] + self.general_registers[z];
+
+        let b = self.memory.load_byte(address);
+        let i: i64 = (b as i8).into();
+        self.general_registers[x] = i as u64;
     }
 }
 
-type InstFn = fn(&mut Machine<HashMemory>, u32);
+fn one_operand(inst: u32) -> usize {
+    (inst & 0x00_ff_ff_ffu32) as usize
+}
 
-fn dummy_inst(_m: &mut Machine<HashMemory>, _ops: u32) {}
+fn two_operands(inst: u32) -> (usize, usize) {
+    let o1 = ((inst >> 16) as u8) as usize;
+    let o2 = (inst & 0x00_00_ff_ff) as usize;
+    (o1, o2)
+}
 
-#[allow(dead_code)]
-fn signed_load_byte(memory: &dyn Memory, address: u64) -> u64 {
-    let b = memory.load_byte(address);
-    let i: i64 = (b as i8).into();
-    i as u64
+fn three_operands(inst: u32) -> (usize, usize, usize) {
+    let o1 = ((inst >> 16) as u8) as usize;
+    let o2 = ((inst >> 8) as u8) as usize;
+    let o3 = (inst as u8) as usize;
+    (o1, o2, o3)
 }
 
 #[cfg(test)]
