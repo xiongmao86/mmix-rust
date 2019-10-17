@@ -11,52 +11,6 @@ struct Machine<T: Memory> {
 
 type InstFn<T> = fn(&mut Machine<T>, u32);
 
-macro_rules! load_method {
-    ($name:ident, load_octa, u64) => {
-        fn $name(&mut self, inst: u32) {
-            let (x, y, z) = three_usize(inst);
-
-            let address = self.gen_regs[y] + self.gen_regs[z];
-
-            let data = self.memory.load_octa(address);
-            self.gen_regs[x] = data;
-        }
-    };
-    ($name:ident, $method:ident, $ty:ty) => {
-        fn $name(&mut self, inst: u32) {
-            let (x, y, z) = three_usize(inst);
-
-            let address = self.gen_regs[y] + self.gen_regs[z];
-
-            let data = self.memory.$method(address);
-            let i: i64 = (data as $ty).into();
-            self.gen_regs[x] = i as u64;
-        }
-    }
-}
-
-macro_rules! unsigned_load_method {
-    ($name:ident, $method:ident) => {
-        fn $name(&mut self, inst: u32) {
-            let (x, y, z) = three_usize(inst);
-
-            let address = self.gen_regs[y] + self.gen_regs[z];
-            self.gen_regs[x] = self.memory.$method(address).into();
-        }
-    }
-}
-
-macro_rules! store_method {
-    ($name:ident, $ty:ty, $method:ident) => {
-        fn $name(&mut self, inst: u32) {
-            let (x, y, z) = three_usize(inst);
-            let address = self.gen_regs[y] + self.gen_regs[z];
-            let data = self.gen_regs[x] as $ty;
-            self.memory.$method(address, data);
-        }
-    }
-}
-
 macro_rules! alias_inst {
     ($alias:ident, $origin:ident) => {
         fn $alias(&mut self, inst: u32) {
@@ -108,7 +62,45 @@ impl<T> Machine<T> where T: Memory {
     }
 
     fn dummy_inst(&mut self, _ops: u32) {}
+}
 
+// load instructions
+macro_rules! load_method {
+    ($name:ident, load_octa, u64) => {
+        fn $name(&mut self, inst: u32) {
+            let (x, y, z) = three_usize(inst);
+
+            let address = self.gen_regs[y] + self.gen_regs[z];
+
+            let data = self.memory.load_octa(address);
+            self.gen_regs[x] = data;
+        }
+    };
+    ($name:ident, $method:ident, $ty:ty) => {
+        fn $name(&mut self, inst: u32) {
+            let (x, y, z) = three_usize(inst);
+
+            let address = self.gen_regs[y] + self.gen_regs[z];
+
+            let data = self.memory.$method(address);
+            let i: i64 = (data as $ty).into();
+            self.gen_regs[x] = i as u64;
+        }
+    }
+}
+
+macro_rules! unsigned_load_method {
+    ($name:ident, $method:ident) => {
+        fn $name(&mut self, inst: u32) {
+            let (x, y, z) = three_usize(inst);
+
+            let address = self.gen_regs[y] + self.gen_regs[z];
+            self.gen_regs[x] = self.memory.$method(address).into();
+        }
+    }
+}
+
+impl<T> Machine<T> where T: Memory {
     load_method!(ldb, load_byte, i8);
     load_method!(ldw, load_wyde, i16);
     load_method!(ldt, load_tetra, i32);
@@ -131,7 +123,21 @@ impl<T> Machine<T> where T: Memory {
     unsigned_load_method!(ldwu, load_wyde);
     unsigned_load_method!(ldtu, load_tetra);
     unsigned_load_method!(ldou, load_octa);
+}
 
+// store instructions
+macro_rules! store_method {
+    ($name:ident, $ty:ty, $method:ident) => {
+        fn $name(&mut self, inst: u32) {
+            let (x, y, z) = three_usize(inst);
+            let address = self.gen_regs[y] + self.gen_regs[z];
+            let data = self.gen_regs[x] as $ty;
+            self.memory.$method(address, data);
+        }
+    }
+}
+
+impl<T> Machine<T> where T: Memory {
     store_method!(stb, u8, store_byte);
     store_method!(stw, u16, store_wyde);
     store_method!(stt, u32, store_tetra);
