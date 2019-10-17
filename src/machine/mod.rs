@@ -63,25 +63,30 @@ mod tests {
     use super::memory::HashMemory;
     use super::*;
 
-    fn machine_for_tests() -> Machine<HashMemory> {
+    fn machine_for_tests(reg3: u64) -> Machine<HashMemory> {
         // $2 = 1000
-        // $3 = 2
+        // $3 = reg3
         let mut hm = HashMemory::new();
         hm.store_octa(1000, 0x01_23_45_67_89_ab_cd_efu64);
         let mut m = Machine::new(hm);
         m.general_registers[2] = 1000;
-        m.general_registers[3] = 2;
+        m.general_registers[3] = reg3;
         m
+    }
+
+    macro_rules! test_ld {
+        ($inst: expr, $reg3:literal, $expect:literal) => {
+            let mut m = machine_for_tests($reg3);
+            m.execute($inst);
+            assert_eq!(m.general_registers[1], $expect);
+        }
     }
 
     //LDB
     #[test]
     fn test_ldb() {
-        let mut m = machine_for_tests();
         let ldb_inst = 0x80010203u32;
-
-        m.execute(ldb_inst);
-        // assert $1 = 0x0000_0000_0000_0045
-        assert_eq!(m.general_registers[1], 0x0000_0000_0000_0045u64);
+        test_ld!(ldb_inst, 2u64, 0x0000_0000_0000_0045u64);
+        test_ld!(ldb_inst, 4u64, 0xffff_ffff_ffff_ff89u64);
     }
 }

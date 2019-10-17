@@ -3,13 +3,6 @@ use crate::memory::Memory;
 
 // Instruction code
 #[allow(dead_code)]
-fn signed_load_byte(memory: &dyn Memory, address: u64) -> u64 {
-    let b = memory.load_byte(address);
-    let i: i64 = (b as i8).into();
-    i as u64
-}
-
-#[allow(dead_code)]
 fn signed_load_wyde(memory: &dyn Memory, address: u64) -> u64 {
     let w = memory.load_wyde(address);
     let i: i64 = (w as i16).into();
@@ -71,21 +64,6 @@ mod tests {
         m.insert(1006, 0xcdu8);
         m.insert(1007, 0xefu8);
         return HashMemory::from(m)
-    }
-
-    #[test]
-    fn test_signed_load_byte() {
-        let m = memory_for_tests();
-        assert_eq!(
-            signed_load_byte(&m, 1002),
-            0x00_00_00_00_00_00_00_45,
-            "should lead with zero."
-        );
-        assert_eq!(
-            signed_load_byte(&m, 1004),
-            0xff_ff_ff_ff_ff_ff_ff_89,
-            "should lead with one."
-        );
     }
 
     #[test]
