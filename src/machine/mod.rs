@@ -92,6 +92,7 @@ impl<T> Machine<T> where T: Memory {
         register_inst!(insts, 0xaa, sttu);
         register_inst!(insts, 0xae, stou);
         register_inst!(insts, 0xb2, stht);
+        register_inst!(insts, 0xb4, stco);
 
         Machine {
             memory,
@@ -146,6 +147,14 @@ impl<T> Machine<T> where T: Memory {
         let address = self.gen_regs[y] + self.gen_regs[z];
         let u = (self.gen_regs[x] >> 32) as u32;
         self.memory.store_tetra(address, u);
+    }
+
+    fn stco(&mut self, inst: u32) {
+        let (x, y, z) = three_operands(inst);
+        let x: u64 = x.into();
+        let (y, z): (usize, usize) = (y.into(), z.into());
+        let address = self.gen_regs[y] + self.gen_regs[z];
+        self.memory.store_octa(address, x);
     }
 }
 
@@ -312,5 +321,11 @@ mod tests {
     fn test_stht() {
         let stht_inst = 0xb2010203u32;
         test_st!(stht_inst, 2u64, 0xffff_ffff_89ab_cdefu64);
+    }
+
+    #[test]
+    fn test_stco() {
+        let stco_inst = 0xb4a00203u32;
+        test_st!(stco_inst, 2u64, 0x0000_0000_0000_00a0u64);
     }
 }
