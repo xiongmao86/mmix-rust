@@ -14,8 +14,7 @@ type InstFn<T> = fn(&mut Machine<T>, u32);
 macro_rules! load_method {
     ($name:ident, load_octa, u64) => {
         fn $name(&mut self, inst: u32) {
-            let (x, y, z) = three_operands(inst);
-            let (x, y, z): (usize, usize, usize) = (x.into(), y.into(), z.into());
+            let (x, y, z) = three_usize(inst);
 
             let address = self.gen_regs[y] + self.gen_regs[z];
 
@@ -25,14 +24,24 @@ macro_rules! load_method {
     };
     ($name:ident, $method:ident, $ty:ty) => {
         fn $name(&mut self, inst: u32) {
-            let (x, y, z) = three_operands(inst);
-            let (x, y, z): (usize, usize, usize) = (x.into(), y.into(), z.into());
+            let (x, y, z) = three_usize(inst);
 
             let address = self.gen_regs[y] + self.gen_regs[z];
 
             let data = self.memory.$method(address);
             let i: i64 = (data as $ty).into();
             self.gen_regs[x] = i as u64;
+        }
+    }
+}
+
+macro_rules! unsigned_load_method {
+    ($name:ident, $method:ident) => {
+        fn $name(&mut self, inst: u32) {
+            let (x, y, z) = three_usize(inst);
+
+            let address = self.gen_regs[y] + self.gen_regs[z];
+            self.gen_regs[x] = self.memory.$method(address).into();
         }
     }
 }
@@ -50,6 +59,11 @@ impl<T> Machine<T> where T: Memory {
         register_inst!(insts, 0x84, ldw);
         register_inst!(insts, 0x88, ldt);
         register_inst!(insts, 0x8c, ldo);
+        register_inst!(insts, 0x82, ldbu);
+        register_inst!(insts, 0x86, ldwu);
+        register_inst!(insts, 0x8a, ldtu);
+        register_inst!(insts, 0x8e, ldou);
+        register_inst!(insts, 0x92, ldht);
         
         Machine {
             memory,
@@ -70,6 +84,18 @@ impl<T> Machine<T> where T: Memory {
     load_method!(ldw, load_wyde, i16);
     load_method!(ldt, load_tetra, i32);
     load_method!(ldo, load_octa, i64);
+
+    unsigned_load_method!(ldbu, load_byte);
+    unsigned_load_method!(ldwu, load_wyde);
+    unsigned_load_method!(ldtu, load_tetra);
+    unsigned_load_method!(ldou, load_octa);
+
+    fn ldht(&mut self, inst: u32) {
+        let (x, y, z) = three_usize(inst);
+        let address = self.gen_regs[y] + self.gen_regs[z];
+        let u: u64 = self.memory.load_tetra(address).into();
+        self.gen_regs[x] = u << 32;
+    }
 }
 
 fn one_operand(inst: u32) -> usize {
@@ -87,6 +113,11 @@ fn three_operands(inst: u32) -> (u8, u8, u8) {
     let o2 = (inst >> 8) as u8;
     let o3 = inst as u8;
     (o1, o2, o3)
+}
+
+fn three_usize(inst: u32) -> (usize, usize, usize) {
+    let (x, y, z) = three_operands(inst);
+    (x.into(), y.into(), z.into())
 }
 
 #[cfg(test)]
@@ -146,5 +177,34 @@ mod tests {
     fn test_ldo() {
         let ldo_inst = 0x8c010203u32;
         test_ld!(ldo_inst, 6u64, 0x0123_4567_89ab_cdefu64);
+    }
+
+    #[test]
+    fn test_ldbu() {
+        let ldbu_inst = 0x82010203u32;
+        test_ld!(ldbu_inst, 5u64, 0x0000_0000_0000_00abu64);
+    }
+
+    #[test]
+    fn test_ldwu() {
+        let ldwu_inst = 0x86010203u32;
+        test_ld!(ldwu_inst, 7u64, 0x0000_0000_0000_cdefu64);
+    }
+
+    #[test]
+    fn test_ldtu() {
+        let ldtu_inst = 0x8a010203u32;
+        test_ld!(ldtu_inst, 6u64, 0x0000_0000_89_ab_cd_efu64);
+    }
+
+    #[test]
+    fn test_ldou() {
+        let ldou_inst = 0x8e010203u32;
+        test_ld!(ldou_inst, 4u64, 0x0123_4567_89ab_cdefu64);
+    }
+    #[test]
+    fn test_ldht() {
+        let ldht_inst = 0x92010203u32;
+        test_ld!(ldht_inst, 1u64, 0x0123_4567_0000_0000u64);
     }
 }
