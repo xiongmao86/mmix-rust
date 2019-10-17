@@ -91,6 +91,7 @@ impl<T> Machine<T> where T: Memory {
         register_inst!(insts, 0xa6, stwu);
         register_inst!(insts, 0xaa, sttu);
         register_inst!(insts, 0xae, stou);
+        register_inst!(insts, 0xb2, stht);
 
         Machine {
             memory,
@@ -139,6 +140,13 @@ impl<T> Machine<T> where T: Memory {
     alias_inst!(stwu, stw);
     alias_inst!(sttu, stt);
     alias_inst!(stou, sto);
+
+    fn stht(&mut self, inst: u32) {
+        let (x, y, z) = three_usize(inst);
+        let address = self.gen_regs[y] + self.gen_regs[z];
+        let u = (self.gen_regs[x] >> 32) as u32;
+        self.memory.store_tetra(address, u);
+    }
 }
 
 fn one_operand(inst: u32) -> usize {
@@ -298,5 +306,11 @@ mod tests {
     fn test_sto() {
         let sto_inst = 0xac010203u32;
         test_st!(sto_inst, 2u64, 0xffff_ffff_ffff_0000u64);
+    }
+
+    #[test]
+    fn test_stht() {
+        let stht_inst = 0xb2010203u32;
+        test_st!(stht_inst, 2u64, 0xffff_ffff_89ab_cdefu64);
     }
 }
