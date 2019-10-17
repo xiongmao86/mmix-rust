@@ -46,6 +46,25 @@ macro_rules! unsigned_load_method {
     }
 }
 
+macro_rules! store_method {
+    ($name:ident, $ty:ty, $method:ident) => {
+        fn $name(&mut self, inst: u32) {
+            let (x, y, z) = three_usize(inst);
+            let address = self.gen_regs[y] + self.gen_regs[z];
+            let data = self.gen_regs[x] as $ty;
+            self.memory.$method(address, data);
+        }
+    }
+}
+
+macro_rules! alias_inst {
+    ($alias:ident, $origin:ident) => {
+        fn $alias(&mut self, inst: u32) {
+            self.$origin(inst);
+        }
+    }
+}
+
 macro_rules! register_inst {
     ($array:ident, $opcode:literal, $inst:ident) => {
         $array[$opcode] = Self::$inst as InstFn<T>;
@@ -64,7 +83,15 @@ impl<T> Machine<T> where T: Memory {
         register_inst!(insts, 0x8a, ldtu);
         register_inst!(insts, 0x8e, ldou);
         register_inst!(insts, 0x92, ldht);
-        
+        register_inst!(insts, 0xa0, stb);
+        register_inst!(insts, 0xa4, stw);
+        register_inst!(insts, 0xa8, stt);
+        register_inst!(insts, 0xac, sto);
+        register_inst!(insts, 0xa2, stbu);
+        register_inst!(insts, 0xa6, stwu);
+        register_inst!(insts, 0xaa, sttu);
+        register_inst!(insts, 0xae, stou);
+
         Machine {
             memory,
             gen_regs: [0; 256],
@@ -85,17 +112,33 @@ impl<T> Machine<T> where T: Memory {
     load_method!(ldt, load_tetra, i32);
     load_method!(ldo, load_octa, i64);
 
-    unsigned_load_method!(ldbu, load_byte);
-    unsigned_load_method!(ldwu, load_wyde);
-    unsigned_load_method!(ldtu, load_tetra);
-    unsigned_load_method!(ldou, load_octa);
-
     fn ldht(&mut self, inst: u32) {
         let (x, y, z) = three_usize(inst);
         let address = self.gen_regs[y] + self.gen_regs[z];
         let u: u64 = self.memory.load_tetra(address).into();
         self.gen_regs[x] = u << 32;
     }
+
+//    fn lda(&mut self, inst: u32) {
+//        let (x, y, z) = three_usize(inst);
+//        let address = self.gen_regs[y] + self.gen_regs[z];
+//        self.gen_regs[x] = address;
+//    }
+
+    unsigned_load_method!(ldbu, load_byte);
+    unsigned_load_method!(ldwu, load_wyde);
+    unsigned_load_method!(ldtu, load_tetra);
+    unsigned_load_method!(ldou, load_octa);
+
+    store_method!(stb, u8, store_byte);
+    store_method!(stw, u16, store_wyde);
+    store_method!(stt, u32, store_tetra);
+    store_method!(sto, u64, store_octa);
+
+    alias_inst!(stbu, stb);
+    alias_inst!(stwu, stw);
+    alias_inst!(sttu, stt);
+    alias_inst!(stou, sto);
 }
 
 fn one_operand(inst: u32) -> usize {
@@ -206,5 +249,54 @@ mod tests {
     fn test_ldht() {
         let ldht_inst = 0x92010203u32;
         test_ld!(ldht_inst, 1u64, 0x0123_4567_0000_0000u64);
+    }
+
+//    #[test]
+//    fn test_lda() {
+//        let lda_inst = 0x??010203u32;
+//        let mut m = machine_for_test(3u64);
+//        m.execute(lda_inst);
+//        assert_eq!(m.gen_regs[1], 1003);
+//    }
+
+    macro_rules! test_st {
+        ($inst:expr, $reg3:expr, $expect:expr) => {
+            let mut m = machine_for_tests($reg3);
+            m.gen_regs[1] = 0xffff_ffff_ffff_0000u64;
+            m.execute($inst);
+            let address = m.gen_regs[2] + m.gen_regs[3];
+            let data = m.memory.load_octa(address);
+            assert_eq!(
+                data,
+                $expect,
+                "Expect 0x{:x?}, found 0x{:x?}.",
+                $expect,
+                data
+            );
+        }
+    }
+
+    #[test]
+    fn test_stb() {
+        let stb_inst = 0xa0010203u32;
+        test_st!(stb_inst, 2u64, 0x0123_0067_89ab_cdefu64);
+    }
+
+    #[test]
+    fn test_stw() {
+        let stw_inst = 0xa4010203u32;
+        test_st!(stw_inst, 2u64, 0x0123_0000_89ab_cdefu64);
+    }
+
+    #[test]
+    fn test_stt() {
+        let stt_inst = 0xa8010203u32;
+        test_st!(stt_inst, 2u64, 0xffff_0000_89ab_cdefu64);
+    }
+
+    #[test]
+    fn test_sto() {
+        let sto_inst = 0xac010203u32;
+        test_st!(sto_inst, 2u64, 0xffff_ffff_ffff_0000u64);
     }
 }
