@@ -56,6 +56,10 @@ impl<T> Machine<T> where T: Memory {
         register_inst!(insts, 0x18, mul);
         register_inst!(insts, 0x1c, div);
 
+        register_inst!(insts, 0x22, addu);
+        register_inst!(insts, 0x26, subu);
+        register_inst!(insts, 0x1a, mulu);
+ 
         Machine {
             memory,
             gen_regs: [0; 256],
@@ -172,7 +176,7 @@ impl<T> Machine<T> where T: Memory {
     }
 }
 
-macro_rules! arith_inst {
+macro_rules! signed_arith_inst {
     ($name:ident, $op:ident) => {
         fn $name(&mut self, inst: u32) {
             let (x, y, z) = three_usize(inst);
@@ -185,9 +189,9 @@ macro_rules! arith_inst {
 }
 
 impl<T> Machine<T> where T: Memory {
-    arith_inst!(add, add);
-    arith_inst!(sub, sub);
-    arith_inst!(mul, mul);
+    signed_arith_inst!(add, add);
+    signed_arith_inst!(sub, sub);
+    signed_arith_inst!(mul, mul);
 
     fn div(&mut self, inst: u32) {
         let (x, y, z) = three_usize(inst);
@@ -209,6 +213,24 @@ impl<T> Machine<T> where T: Memory {
             self.spcl_regs[6] = m as u64;
         }
     }
+}
+
+macro_rules! unsigned_arith_inst {
+    ($name:ident, $op:ident) => {
+        fn $name(&mut self, inst: u32) {
+            let (x, y, z) = three_usize(inst);
+            let o2 = self.gen_regs[y];
+            let o3 = self.gen_regs[z];
+            let r = o2.$op(o3);
+            self.gen_regs[x] = r;
+        }
+    }
+}
+
+impl<T> Machine<T> where T: Memory {
+    unsigned_arith_inst!(addu, add);
+    unsigned_arith_inst!(subu, sub);
+    unsigned_arith_inst!(mulu, mul);
 }
 
 fn one_operand(inst: u32) -> usize {
@@ -436,5 +458,30 @@ mod tests {
         test_signed_div(div_inst, 0i64, 3i64, 3i64, 0i64);
         test_signed_div(div_inst, 1i64, 2i64, 6i64, 4i64);
         test_signed_div(div_inst, -2i64, -2i64, 6i64, -4i64);
+    }
+
+    fn test_unsigned_arith(inst: u32, expect: u64, op1: u64, op2: u64) {
+        let mut m = machine_for_arithmetic_test(op1, op2);
+        m.execute(inst);
+        let reg1 = m.gen_regs[1];
+        assert_eq!(reg1, expect, "expect {:?}, found {:?}", expect, reg1);
+    }
+
+    #[test]
+    fn test_addu() {
+        let addu_inst = 0x22010203u32;
+        test_unsigned_arith(addu_inst, 14u64, 8u64, 6u64);
+    }
+
+    #[test]
+    fn test_subu() {
+        let subu_inst = 0x26010203u32;
+        test_unsigned_arith(subu_inst, 3u64, 14u64, 11u64);
+    }
+
+    #[test]
+    fn test_mulu() {
+        let mulu_inst = 0x1a010203u32;
+        test_unsigned_arith(mulu_inst, 15u64, 3u64, 5u64);
     }
 }
