@@ -28,6 +28,7 @@ macro_rules! register_inst {
 impl<T> Machine<T> where T: Memory {
     fn new(memory: T) -> Machine<T> {
         let mut insts = [ Self::dummy_inst as InstFn<T>; 256];
+
         register_inst!(insts, 0x80, ldb);
         register_inst!(insts, 0x84, ldw);
         register_inst!(insts, 0x88, ldt);
@@ -37,6 +38,7 @@ impl<T> Machine<T> where T: Memory {
         register_inst!(insts, 0x8a, ldtu);
         register_inst!(insts, 0x8e, ldou);
         register_inst!(insts, 0x92, ldht);
+
         register_inst!(insts, 0xa0, stb);
         register_inst!(insts, 0xa4, stw);
         register_inst!(insts, 0xa8, stt);
@@ -47,6 +49,8 @@ impl<T> Machine<T> where T: Memory {
         register_inst!(insts, 0xae, stou);
         register_inst!(insts, 0xb2, stht);
         register_inst!(insts, 0xb4, stco);
+
+        register_inst!(insts, 0x20, add);
 
         Machine {
             memory,
@@ -164,6 +168,16 @@ impl<T> Machine<T> where T: Memory {
     }
 }
 
+impl<T> Machine<T> where T: Memory {
+    fn add(&mut self, inst: u32) {
+        let (x, y, z) = three_usize(inst);
+        let o2 = self.gen_regs[y] as i64;
+        let o3 = self.gen_regs[z] as i64;
+        let r = o2 + o3;
+        self.gen_regs[x] = r as u64;
+    }
+}
+
 fn one_operand(inst: u32) -> usize {
     (inst & 0x00_ff_ff_ffu32) as usize
 }
@@ -191,7 +205,7 @@ mod tests {
     use super::memory::HashMemory;
     use super::*;
 
-    fn machine_for_tests(reg3: u64) -> Machine<HashMemory> {
+    fn machine_for_memory_tests(reg3: u64) -> Machine<HashMemory> {
         // $2 = 1000
         // $3 = reg3
         let mut hm = HashMemory::new();
@@ -204,7 +218,7 @@ mod tests {
 
     macro_rules! test_ld {
         ($inst: expr, $reg3:literal, $expect:literal) => {
-            let mut m = machine_for_tests($reg3);
+            let mut m = machine_for_memory_tests($reg3);
             m.execute($inst);
             assert_eq!(
                 m.gen_regs[1],
@@ -284,7 +298,7 @@ mod tests {
 
     macro_rules! test_st {
         ($inst:expr, $reg3:expr, $expect:expr) => {
-            let mut m = machine_for_tests($reg3);
+            let mut m = machine_for_memory_tests($reg3);
             m.gen_regs[1] = 0xffff_ffff_ffff_0000u64;
             m.execute($inst);
             let address = m.gen_regs[2] + m.gen_regs[3];
@@ -333,5 +347,30 @@ mod tests {
     fn test_stco() {
         let stco_inst = 0xb4a00203u32;
         test_st!(stco_inst, 2u64, 0x0000_0000_0000_00a0u64);
+    }
+
+    fn machine_for_arithmetic_test(reg2: u64, reg3: u64) -> Machine<HashMemory> {
+        let hm = HashMemory::new();
+        let mut m = Machine::new(hm);
+        
+        m.gen_regs[2] = reg2;
+        m.gen_regs[3] = reg3;
+
+        m
+    }
+
+    fn test_signed_arith(inst: u32, expect: i64, op1: i64, op2: i64) {
+        let mut m = machine_for_arithmetic_test(op1 as u64, op2 as u64);
+        m.execute(inst);
+        let reg1 = m.gen_regs[1] as i64;
+        assert_eq!(reg1, expect, "expect {:?}, found {:?}", expect, reg1);
+    }
+
+    #[test]
+    fn test_add() {
+        let add_inst = 0x20010203u32;
+        
+        test_signed_arith(add_inst, 7i64, 3i64, 4i64);
+        test_signed_arith(add_inst, -1i64, 3i64, -4i64);
     }
 }
