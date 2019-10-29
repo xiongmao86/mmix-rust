@@ -1,5 +1,6 @@
 mod memory;
 use memory::{ Memory, HashMemory };
+use std::ops::{ Add, Sub, Mul };
 
 #[allow(dead_code)]
 struct Machine<T: Memory> {
@@ -52,6 +53,7 @@ impl<T> Machine<T> where T: Memory {
 
         register_inst!(insts, 0x20, add);
         register_inst!(insts, 0x24, sub);
+        register_inst!(insts, 0x18, mul);
 
         Machine {
             memory,
@@ -169,22 +171,22 @@ impl<T> Machine<T> where T: Memory {
     }
 }
 
-impl<T> Machine<T> where T: Memory {
-    fn add(&mut self, inst: u32) {
-        let (x, y, z) = three_usize(inst);
-        let o2 = self.gen_regs[y] as i64;
-        let o3 = self.gen_regs[z] as i64;
-        let r = o2 + o3;
-        self.gen_regs[x] = r as u64;
+macro_rules! arith_inst {
+    ($name:ident, $op:ident) => {
+        fn $name(&mut self, inst: u32) {
+            let (x, y, z) = three_usize(inst);
+            let o2 = self.gen_regs[y] as i64;
+            let o3 = self.gen_regs[z] as i64;
+            let r = o2.$op(o3);
+            self.gen_regs[x] = r as u64;
+        }
     }
+}
 
-    fn sub(&mut self, inst: u32) {
-        let (x, y, z) = three_usize(inst);
-        let o2 = self.gen_regs[y] as i64;
-        let o3 = self.gen_regs[z] as i64;
-        let r = o2 - o3;
-        self.gen_regs[x] = r as u64;
-    }
+impl<T> Machine<T> where T: Memory {
+    arith_inst!(add, add);
+    arith_inst!(sub, sub);
+    arith_inst!(mul, mul);
 }
 
 fn one_operand(inst: u32) -> usize {
@@ -388,5 +390,12 @@ mod tests {
         let sub_inst = 0x24010203u32;
         test_signed_arith(sub_inst, -1i64, 3i64, 4i64);
         test_signed_arith(sub_inst, 1i64, 4i64, 3i64);
+    }
+
+    #[test]
+    fn test_mul() {
+        let mul_inst = 0x18010203u32;
+        test_signed_arith(mul_inst, 30i64, 5i64, 6i64);
+        test_signed_arith(mul_inst, -45i64, 9i64, -5i64);
     }
 }
