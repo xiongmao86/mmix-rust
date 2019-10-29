@@ -51,6 +51,7 @@ impl<T> Machine<T> where T: Memory {
         register_inst!(insts, 0xb4, stco);
 
         register_inst!(insts, 0x20, add);
+        register_inst!(insts, 0x24, sub);
 
         Machine {
             memory,
@@ -174,6 +175,14 @@ impl<T> Machine<T> where T: Memory {
         let o2 = self.gen_regs[y] as i64;
         let o3 = self.gen_regs[z] as i64;
         let r = o2 + o3;
+        self.gen_regs[x] = r as u64;
+    }
+
+    fn sub(&mut self, inst: u32) {
+        let (x, y, z) = three_usize(inst);
+        let o2 = self.gen_regs[y] as i64;
+        let o3 = self.gen_regs[z] as i64;
+        let r = o2 - o3;
         self.gen_regs[x] = r as u64;
     }
 }
@@ -372,5 +381,12 @@ mod tests {
         
         test_signed_arith(add_inst, 7i64, 3i64, 4i64);
         test_signed_arith(add_inst, -1i64, 3i64, -4i64);
+    }
+
+    #[test]
+    fn test_sub() {
+        let sub_inst = 0x24010203u32;
+        test_signed_arith(sub_inst, -1i64, 3i64, 4i64);
+        test_signed_arith(sub_inst, 1i64, 4i64, 3i64);
     }
 }
