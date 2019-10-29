@@ -6,7 +6,7 @@ use std::ops::{ Add, Sub, Mul };
 struct Machine<T: Memory> {
     memory: T,
     gen_regs: [u64; 256],
-    special_registers: [u64; 32],
+    spcl_regs: [u64; 32],
     instructions: [InstFn<T>; 256],
 }
 
@@ -54,11 +54,12 @@ impl<T> Machine<T> where T: Memory {
         register_inst!(insts, 0x20, add);
         register_inst!(insts, 0x24, sub);
         register_inst!(insts, 0x18, mul);
+        register_inst!(insts, 0x1c, div);
 
         Machine {
             memory,
             gen_regs: [0; 256],
-            special_registers: [0; 32],
+            spcl_regs: [0; 32],
             instructions: insts,
         }
     }
@@ -187,6 +188,27 @@ impl<T> Machine<T> where T: Memory {
     arith_inst!(add, add);
     arith_inst!(sub, sub);
     arith_inst!(mul, mul);
+
+    fn div(&mut self, inst: u32) {
+        let (x, y, z) = three_usize(inst);
+        let o2 = self.gen_regs[y] as i64;
+        let o3 = self.gen_regs[z] as i64;
+        if o3 == 0 {
+            self.gen_regs[x] = o3 as u64;
+            self.spcl_regs[6] = o2 as u64;
+        } else if (o3 > 0 && o2 >=0) ||
+            (o3 < 0 && o2 < 0 ) {
+            let q = o2 / o3;
+            self.gen_regs[x] = q as u64;
+            let m  = o2 - o3 * q;
+            self.spcl_regs[6] = m as u64;
+        } else {
+            let q = o2 / o3 - 1;
+            self.gen_regs[x] = q as u64;
+            let m = o2 - o3 * q;
+            self.spcl_regs[6] = m as u64;
+        }
+    }
 }
 
 fn one_operand(inst: u32) -> usize {
@@ -397,5 +419,22 @@ mod tests {
         let mul_inst = 0x18010203u32;
         test_signed_arith(mul_inst, 30i64, 5i64, 6i64);
         test_signed_arith(mul_inst, -45i64, 9i64, -5i64);
+    }
+
+    fn test_signed_div(inst: u32, expect_quotient: i64, expect_remainder: i64, op1: i64, op2: i64) {
+        let mut m = machine_for_arithmetic_test(op1 as u64, op2 as u64);
+        m.execute(inst);
+        let reg1 = m.gen_regs[1] as i64;
+        assert_eq!(reg1, expect_quotient, "expect quotient: {:?}, found {:?}", expect_quotient, reg1);
+        let reg_r = m.spcl_regs[6] as i64;
+        assert_eq!(reg_r, expect_remainder, "expect remainder: {:?}, found {:?}", expect_remainder, reg_r);
+    }
+
+    #[test]
+    fn test_div() {
+        let div_inst = 0x1c010203u32;
+        test_signed_div(div_inst, 0i64, 3i64, 3i64, 0i64);
+        test_signed_div(div_inst, 1i64, 2i64, 6i64, 4i64);
+        test_signed_div(div_inst, -2i64, -2i64, 6i64, -4i64);
     }
 }
