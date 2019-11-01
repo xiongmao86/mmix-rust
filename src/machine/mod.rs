@@ -5,9 +5,22 @@ use std::ops::{ Add, Sub, Mul };
 #[allow(dead_code)]
 struct Machine<T: Memory> {
     memory: T,
-    gen_regs: [u64; 256],
+    gen_regs: [Register; 256],
     spcl_regs: [u64; 32],
     instructions: [InstFn<T>; 256],
+}
+
+#[derive(Clone, Copy)]
+struct Register(u64);
+
+impl Register {
+    fn get(&self) -> u64 {
+        self.0
+    }
+
+    fn set(&mut self, data: u64) {
+        self.0 = data;
+    }
 }
 
 type InstFn<T> = fn(&mut Machine<T>, u32);
@@ -62,7 +75,7 @@ impl<T> Machine<T> where T: Memory {
  
         Machine {
             memory,
-            gen_regs: [0; 256],
+            gen_regs: [Register(0u64); 256],
             spcl_regs: [0; 32],
             instructions: insts,
         }
@@ -71,6 +84,10 @@ impl<T> Machine<T> where T: Memory {
     fn execute(&mut self, inst: u32) {
         let opcode = ((inst >> 24 ) as u8) as usize;
         self.instructions[opcode](self, inst);
+    }
+
+    fn greg(&mut self, index: usize) -> &mut Register {
+        &mut self.gen_regs[index]
     }
 
     fn dummy_inst(&mut self, _ops: u32) {}
@@ -82,21 +99,21 @@ macro_rules! load_method {
         fn $name(&mut self, inst: u32) {
             let (x, y, z) = three_usize(inst);
 
-            let address = self.gen_regs[y] + self.gen_regs[z];
+            let address = self.greg(y).get() + self.greg(z).get();
 
             let data = self.memory.load_octa(address);
-            self.gen_regs[x] = data;
+            self.greg(x).set(data);
         }
     };
     ($name:ident, $method:ident, $ty:ty) => {
         fn $name(&mut self, inst: u32) {
             let (x, y, z) = three_usize(inst);
 
-            let address = self.gen_regs[y] + self.gen_regs[z];
+            let address = self.greg(y).get() + self.greg(z).get();
 
             let data = self.memory.$method(address);
             let i: i64 = (data as $ty).into();
-            self.gen_regs[x] = i as u64;
+            self.greg(x).set(i as u64);
         }
     }
 }
@@ -106,8 +123,9 @@ macro_rules! unsigned_load_method {
         fn $name(&mut self, inst: u32) {
             let (x, y, z) = three_usize(inst);
 
-            let address = self.gen_regs[y] + self.gen_regs[z];
-            self.gen_regs[x] = self.memory.$method(address).into();
+            let address = self.greg(y).get() + self.greg(z).get();
+            let data = self.memory.$method(address).into();
+            self.greg(x).set(data);
         }
     }
 }
@@ -120,15 +138,15 @@ impl<T> Machine<T> where T: Memory {
 
     fn ldht(&mut self, inst: u32) {
         let (x, y, z) = three_usize(inst);
-        let address = self.gen_regs[y] + self.gen_regs[z];
+        let address = self.greg(y).get() + self.greg(z).get();
         let u: u64 = self.memory.load_tetra(address).into();
-        self.gen_regs[x] = u << 32;
+        self.greg(x).set(u << 32);
     }
 
 //    fn lda(&mut self, inst: u32) {
 //        let (x, y, z) = three_usize(inst);
-//        let address = self.gen_regs[y] + self.gen_regs[z];
-//        self.gen_regs[x] = address;
+//        let address = self.greg(y).get() + self.greg(z).get();
+//        self.greg(x).set(address);
 //    }
 
     unsigned_load_method!(ldbu, load_byte);
@@ -142,8 +160,8 @@ macro_rules! store_method {
     ($name:ident, $ty:ty, $method:ident) => {
         fn $name(&mut self, inst: u32) {
             let (x, y, z) = three_usize(inst);
-            let address = self.gen_regs[y] + self.gen_regs[z];
-            let data = self.gen_regs[x] as $ty;
+            let address = self.greg(y).get() + self.greg(z).get();
+            let data = self.greg(x).get() as $ty;
             self.memory.$method(address, data);
         }
     }
@@ -162,8 +180,8 @@ impl<T> Machine<T> where T: Memory {
 
     fn stht(&mut self, inst: u32) {
         let (x, y, z) = three_usize(inst);
-        let address = self.gen_regs[y] + self.gen_regs[z];
-        let u = (self.gen_regs[x] >> 32) as u32;
+        let address = self.greg(y).get() + self.greg(z).get();
+        let u = (self.greg(x).get() >> 32) as u32;
         self.memory.store_tetra(address, u);
     }
 
@@ -171,7 +189,7 @@ impl<T> Machine<T> where T: Memory {
         let (x, y, z) = three_operands(inst);
         let x: u64 = x.into();
         let (y, z): (usize, usize) = (y.into(), z.into());
-        let address = self.gen_regs[y] + self.gen_regs[z];
+        let address = self.greg(y).get() + self.greg(z).get();
         self.memory.store_octa(address, x);
     }
 }
@@ -180,10 +198,10 @@ macro_rules! signed_arith_inst {
     ($name:ident, $op:ident) => {
         fn $name(&mut self, inst: u32) {
             let (x, y, z) = three_usize(inst);
-            let o2 = self.gen_regs[y] as i64;
-            let o3 = self.gen_regs[z] as i64;
+            let o2 = self.greg(y).get() as i64;
+            let o3 = self.greg(z).get() as i64;
             let r = o2.$op(o3);
-            self.gen_regs[x] = r as u64;
+            self.greg(x).set(r as u64);
         }
     }
 }
@@ -195,20 +213,20 @@ impl<T> Machine<T> where T: Memory {
 
     fn div(&mut self, inst: u32) {
         let (x, y, z) = three_usize(inst);
-        let o2 = self.gen_regs[y] as i64;
-        let o3 = self.gen_regs[z] as i64;
+        let o2 = self.greg(y).get() as i64;
+        let o3 = self.greg(z).get() as i64;
         if o3 == 0 {
-            self.gen_regs[x] = o3 as u64;
+            self.greg(x).set(o3 as u64);
             self.spcl_regs[6] = o2 as u64;
         } else if (o3 > 0 && o2 >=0) ||
             (o3 < 0 && o2 < 0 ) {
             let q = o2 / o3;
-            self.gen_regs[x] = q as u64;
+            self.greg(x).set(q as u64);
             let m  = o2 - o3 * q;
             self.spcl_regs[6] = m as u64;
         } else {
             let q = o2 / o3 - 1;
-            self.gen_regs[x] = q as u64;
+            self.greg(x).set(q as u64);
             let m = o2 - o3 * q;
             self.spcl_regs[6] = m as u64;
         }
@@ -219,10 +237,10 @@ macro_rules! unsigned_arith_inst {
     ($name:ident, $op:ident) => {
         fn $name(&mut self, inst: u32) {
             let (x, y, z) = three_usize(inst);
-            let o2 = self.gen_regs[y];
-            let o3 = self.gen_regs[z];
+            let o2 = self.greg(y).get();
+            let o3 = self.greg(z).get();
             let r = o2.$op(o3);
-            self.gen_regs[x] = r;
+            self.greg(x).set(r);
         }
     }
 }
@@ -266,8 +284,8 @@ mod tests {
         let mut hm = HashMemory::new();
         hm.store_octa(1000, 0x01_23_45_67_89_ab_cd_efu64);
         let mut m = Machine::new(hm);
-        m.gen_regs[2] = 1000;
-        m.gen_regs[3] = reg3;
+        m.greg(2).set(1000);
+        m.greg(3).set(reg3);
         m
     }
 
@@ -276,11 +294,11 @@ mod tests {
             let mut m = machine_for_memory_tests($reg3);
             m.execute($inst);
             assert_eq!(
-                m.gen_regs[1],
+                m.greg(1).get(),
                 $expect,
                 "Expect 0x{:x?}, found 0x{:x?}",
                 $expect,
-                m.gen_regs[1]
+                m.greg(1).get()
             );  
         }
     }
@@ -348,15 +366,15 @@ mod tests {
 //        let lda_inst = 0x??010203u32;
 //        let mut m = machine_for_test(3u64);
 //        m.execute(lda_inst);
-//        assert_eq!(m.gen_regs[1], 1003);
+//        assert_eq!(m.greg(1).get(), 1003);
 //    }
 
     macro_rules! test_st {
         ($inst:expr, $reg3:expr, $expect:expr) => {
             let mut m = machine_for_memory_tests($reg3);
-            m.gen_regs[1] = 0xffff_ffff_ffff_0000u64;
+            m.greg(1).set(0xffff_ffff_ffff_0000u64);
             m.execute($inst);
-            let address = m.gen_regs[2] + m.gen_regs[3];
+            let address = m.greg(2).get() + m.greg(3).get();
             let data = m.memory.load_octa(address);
             assert_eq!(
                 data,
@@ -408,8 +426,8 @@ mod tests {
         let hm = HashMemory::new();
         let mut m = Machine::new(hm);
         
-        m.gen_regs[2] = reg2;
-        m.gen_regs[3] = reg3;
+        m.greg(2).set(reg2);
+        m.greg(3).set(reg3);
 
         m
     }
@@ -417,7 +435,7 @@ mod tests {
     fn test_signed_arith(inst: u32, expect: i64, op1: i64, op2: i64) {
         let mut m = machine_for_arithmetic_test(op1 as u64, op2 as u64);
         m.execute(inst);
-        let reg1 = m.gen_regs[1] as i64;
+        let reg1 = m.greg(1).get() as i64;
         assert_eq!(reg1, expect, "expect {:?}, found {:?}", expect, reg1);
     }
 
@@ -446,7 +464,7 @@ mod tests {
     fn test_signed_div(inst: u32, expect_quotient: i64, expect_remainder: i64, op1: i64, op2: i64) {
         let mut m = machine_for_arithmetic_test(op1 as u64, op2 as u64);
         m.execute(inst);
-        let reg1 = m.gen_regs[1] as i64;
+        let reg1 = m.greg(1).get() as i64;
         assert_eq!(reg1, expect_quotient, "expect quotient: {:?}, found {:?}", expect_quotient, reg1);
         let reg_r = m.spcl_regs[6] as i64;
         assert_eq!(reg_r, expect_remainder, "expect remainder: {:?}, found {:?}", expect_remainder, reg_r);
@@ -463,7 +481,7 @@ mod tests {
     fn test_unsigned_arith(inst: u32, expect: u64, op1: u64, op2: u64) {
         let mut m = machine_for_arithmetic_test(op1, op2);
         m.execute(inst);
-        let reg1 = m.gen_regs[1];
+        let reg1 = m.greg(1).get();
         assert_eq!(reg1, expect, "expect {:?}, found {:?}", expect, reg1);
     }
 
