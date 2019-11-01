@@ -6,7 +6,7 @@ use std::ops::{ Add, Sub, Mul };
 struct Machine<T: Memory> {
     memory: T,
     gen_regs: [Register; 256],
-    spcl_regs: [u64; 32],
+    spcl_regs: [Register; 32],
     instructions: [InstFn<T>; 256],
 }
 
@@ -20,6 +20,19 @@ impl Register {
 
     fn set(&mut self, data: u64) {
         self.0 = data;
+    }
+}
+
+#[derive(Debug)]
+enum SpecialRegister {
+    rA, rB, rC, rD, rE, rF, rG, rH, rI, rJ, rK, rL, rM, rN, rO, rP, rQ, rR, rS, rT, rU, rV, rW, rX, rY, rZ,
+    rBB, rTT, rWW, rXX, rYY, rZZ
+}
+
+fn to_index(sr: SpecialRegister) -> usize {
+    match sr {
+        rR => 6,
+        other => panic!("{:?} index not added.", other)
     }
 }
 
@@ -76,7 +89,7 @@ impl<T> Machine<T> where T: Memory {
         Machine {
             memory,
             gen_regs: [Register(0u64); 256],
-            spcl_regs: [0; 32],
+            spcl_regs: [Register(0u64); 32],
             instructions: insts,
         }
     }
@@ -90,7 +103,14 @@ impl<T> Machine<T> where T: Memory {
         &mut self.gen_regs[index]
     }
 
-    fn dummy_inst(&mut self, _ops: u32) {}
+    fn spreg(&mut self, sr_name: SpecialRegister) -> &mut Register {
+        &mut self.spcl_regs[to_index(sr_name)]
+    }
+
+    fn dummy_inst(&mut self, ops: u32) {
+        let opcode = ops >> 24;
+        panic!("Instruction of {:?} is not added yet.", opcode);
+    }
 }
 
 // load instructions
@@ -217,18 +237,18 @@ impl<T> Machine<T> where T: Memory {
         let o3 = self.greg(z).get() as i64;
         if o3 == 0 {
             self.greg(x).set(o3 as u64);
-            self.spcl_regs[6] = o2 as u64;
+            self.spreg(SpecialRegister::rR).set(o2 as u64);
         } else if (o3 > 0 && o2 >=0) ||
             (o3 < 0 && o2 < 0 ) {
             let q = o2 / o3;
             self.greg(x).set(q as u64);
             let m  = o2 - o3 * q;
-            self.spcl_regs[6] = m as u64;
+            self.spreg(SpecialRegister::rR).set(m as u64);
         } else {
             let q = o2 / o3 - 1;
             self.greg(x).set(q as u64);
             let m = o2 - o3 * q;
-            self.spcl_regs[6] = m as u64;
+            self.spreg(SpecialRegister::rR).set(m as u64);
         }
     }
 }
@@ -466,7 +486,7 @@ mod tests {
         m.execute(inst);
         let reg1 = m.greg(1).get() as i64;
         assert_eq!(reg1, expect_quotient, "expect quotient: {:?}, found {:?}", expect_quotient, reg1);
-        let reg_r = m.spcl_regs[6] as i64;
+        let reg_r = m.spreg(SpecialRegister::rR).get() as i64;
         assert_eq!(reg_r, expect_remainder, "expect remainder: {:?}, found {:?}", expect_remainder, reg_r);
     }
 
