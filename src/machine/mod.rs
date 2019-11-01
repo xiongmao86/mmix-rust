@@ -100,8 +100,8 @@ impl<T> Machine<T> where T: Memory {
         self.instructions[opcode](self, inst);
     }
 
-    fn greg(&mut self, index: usize) -> &mut Register {
-        &mut self.gen_regs[index]
+    fn greg(&mut self, index: u8) -> &mut Register {
+        &mut self.gen_regs[index as usize]
     }
 
     fn spreg(&mut self, sr_name: SpecialRegister) -> &mut Register {
@@ -118,7 +118,7 @@ impl<T> Machine<T> where T: Memory {
 macro_rules! load_method {
     ($name:ident, load_octa, u64) => {
         fn $name(&mut self, inst: u32) {
-            let (x, y, z) = three_usize(inst);
+            let (x, y, z) = three_operands(inst);
 
             let address = self.greg(y).get() + self.greg(z).get();
 
@@ -128,7 +128,7 @@ macro_rules! load_method {
     };
     ($name:ident, $method:ident, $ty:ty) => {
         fn $name(&mut self, inst: u32) {
-            let (x, y, z) = three_usize(inst);
+            let (x, y, z) = three_operands(inst);
 
             let address = self.greg(y).get() + self.greg(z).get();
 
@@ -142,7 +142,7 @@ macro_rules! load_method {
 macro_rules! unsigned_load_method {
     ($name:ident, $method:ident) => {
         fn $name(&mut self, inst: u32) {
-            let (x, y, z) = three_usize(inst);
+            let (x, y, z) = three_operands(inst);
 
             let address = self.greg(y).get() + self.greg(z).get();
             let data = self.memory.$method(address).into();
@@ -158,17 +158,11 @@ impl<T> Machine<T> where T: Memory {
     load_method!(ldo, load_octa, i64);
 
     fn ldht(&mut self, inst: u32) {
-        let (x, y, z) = three_usize(inst);
+        let (x, y, z) = three_operands(inst);
         let address = self.greg(y).get() + self.greg(z).get();
         let u: u64 = self.memory.load_tetra(address).into();
         self.greg(x).set(u << 32);
     }
-
-//    fn lda(&mut self, inst: u32) {
-//        let (x, y, z) = three_usize(inst);
-//        let address = self.greg(y).get() + self.greg(z).get();
-//        self.greg(x).set(address);
-//    }
 
     unsigned_load_method!(ldbu, load_byte);
     unsigned_load_method!(ldwu, load_wyde);
@@ -180,7 +174,7 @@ impl<T> Machine<T> where T: Memory {
 macro_rules! store_method {
     ($name:ident, $ty:ty, $method:ident) => {
         fn $name(&mut self, inst: u32) {
-            let (x, y, z) = three_usize(inst);
+            let (x, y, z) = three_operands(inst);
             let address = self.greg(y).get() + self.greg(z).get();
             let data = self.greg(x).get() as $ty;
             self.memory.$method(address, data);
@@ -200,7 +194,7 @@ impl<T> Machine<T> where T: Memory {
     alias_inst!(stou, sto);
 
     fn stht(&mut self, inst: u32) {
-        let (x, y, z) = three_usize(inst);
+        let (x, y, z) = three_operands(inst);
         let address = self.greg(y).get() + self.greg(z).get();
         let u = (self.greg(x).get() >> 32) as u32;
         self.memory.store_tetra(address, u);
@@ -209,7 +203,6 @@ impl<T> Machine<T> where T: Memory {
     fn stco(&mut self, inst: u32) {
         let (x, y, z) = three_operands(inst);
         let x: u64 = x.into();
-        let (y, z): (usize, usize) = (y.into(), z.into());
         let address = self.greg(y).get() + self.greg(z).get();
         self.memory.store_octa(address, x);
     }
@@ -218,7 +211,7 @@ impl<T> Machine<T> where T: Memory {
 macro_rules! signed_arith_inst {
     ($name:ident, $op:ident) => {
         fn $name(&mut self, inst: u32) {
-            let (x, y, z) = three_usize(inst);
+            let (x, y, z) = three_operands(inst);
             let o2 = self.greg(y).get() as i64;
             let o3 = self.greg(z).get() as i64;
             let r = o2.$op(o3);
@@ -233,7 +226,7 @@ impl<T> Machine<T> where T: Memory {
     signed_arith_inst!(mul, mul);
 
     fn div(&mut self, inst: u32) {
-        let (x, y, z) = three_usize(inst);
+        let (x, y, z) = three_operands(inst);
         let o2 = self.greg(y).get() as i64;
         let o3 = self.greg(z).get() as i64;
         if o3 == 0 {
@@ -257,7 +250,7 @@ impl<T> Machine<T> where T: Memory {
 macro_rules! unsigned_arith_inst {
     ($name:ident, $op:ident) => {
         fn $name(&mut self, inst: u32) {
-            let (x, y, z) = three_usize(inst);
+            let (x, y, z) = three_operands(inst);
             let o2 = self.greg(y).get();
             let o3 = self.greg(z).get();
             let r = o2.$op(o3);
@@ -271,7 +264,7 @@ impl<T> Machine<T> where T: Memory {
     unsigned_arith_inst!(subu, sub);
 
     fn mulu(&mut self, inst: u32) {
-        let (x, y, z) = three_usize(inst);
+        let (x, y, z) = three_operands(inst);
         let o2 = self.greg(y).get() as u128;
         let o3 = self.greg(z).get() as u128;
         let r = o2 * o3;
@@ -299,19 +292,12 @@ fn three_operands(inst: u32) -> (u8, u8, u8) {
     (o1, o2, o3)
 }
 
-fn three_usize(inst: u32) -> (usize, usize, usize) {
-    let (x, y, z) = three_operands(inst);
-    (x.into(), y.into(), z.into())
-}
-
 #[cfg(test)]
 mod tests {
     use super::memory::HashMemory;
     use super::*;
 
     fn machine_for_memory_tests(reg3: u64) -> Machine<HashMemory> {
-        // $2 = 1000
-        // $3 = reg3
         let mut hm = HashMemory::new();
         hm.store_octa(1000, 0x01_23_45_67_89_ab_cd_efu64);
         let mut m = Machine::new(hm);
@@ -391,14 +377,6 @@ mod tests {
         let ldht_inst = 0x92010203u32;
         test_ld!(ldht_inst, 1u64, 0x0123_4567_0000_0000u64);
     }
-
-//    #[test]
-//    fn test_lda() {
-//        let lda_inst = 0x??010203u32;
-//        let mut m = machine_for_test(3u64);
-//        m.execute(lda_inst);
-//        assert_eq!(m.greg(1).get(), 1003);
-//    }
 
     macro_rules! test_st {
         ($inst:expr, $reg3:expr, $expect:expr) => {
