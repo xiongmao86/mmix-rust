@@ -86,6 +86,7 @@ impl<T> Machine<T> where T: Memory {
         register_inst!(insts, 0x22, addu);
         register_inst!(insts, 0x26, subu);
         register_inst!(insts, 0x1a, mulu);
+        register_inst!(insts, 0x1e, divu);
  
         Machine {
             memory,
@@ -272,6 +273,30 @@ impl<T> Machine<T> where T: Memory {
         let r_d = (r >> 64) as u64;
         self.greg(x).set(r1);
         self.spreg(SpecialRegister::rD).set(r_d);
+    }
+
+    // My intepretation of mmix doc: if higher 64-bit of divident rD is bigger
+    // than divisor, the operation may produce a 16 byte quotient and an 8
+    // byte remainder. In this case the machine will estimate and quotient
+    // as rD, and the remainder as the lower 64-bit of the divident.
+    fn divu(&mut self, inst: u32) {
+        let (x, y, z) = three_operands(inst);
+        let op3 = self.greg(z).get();
+        let rd = self.spreg(SpecialRegister::rD).get();
+        if op3 > rd {
+            let h: u128 = rd.into();
+            let l: u128 = self.greg(y).get().into();
+            let divident = (h << 64) | l;
+            let divisor: u128 = op3.into();
+            let quotient = divident / divisor;
+            let module = divident % divisor;
+            self.greg(x).set(quotient as u64);
+            self.spreg(SpecialRegister::rR).set(module as u64);
+        } else {
+            self.greg(x).set(rd);
+            let rr = self.greg(y).get();
+            self.spreg(SpecialRegister::rR).set(rr);
+        }
     }
 }
 
@@ -521,5 +546,23 @@ mod tests {
 
         test_unsigned_multiply(mulu_inst, 15u128, 3u64, 5u64);
         test_unsigned_multiply(mulu_inst, 551240594518494412800u128, 30u64, 18374686483949813760u64);
+    }
+
+    fn test_unsigned_divide(inst: u32, expect_r1: u64, expect_rr: u64, rd: u64, op1: u64, op2: u64) {
+        let mut m = machine_for_arithmetic_test(op1, op2);
+        m.spreg(SpecialRegister::rD).set(rd);
+        m.execute(inst);
+        let reg1 = m.greg(1).get();
+        let r_r = m.spreg(SpecialRegister::rR).get();
+        assert_eq!(expect_r1, reg1, "expect quotient {:?}, found {:?}", expect_r1, reg1);
+        assert_eq!(expect_rr, r_r, "expect remainder {:?}, found {:?}", expect_rr, r_r);
+    }
+
+    #[test]
+    fn test_divu() {
+        let divu_inst = 0x1e010203u32;
+
+        test_unsigned_divide(divu_inst, 9223372036854775809u64, 2u64, 2u64, 6u64, 4u64);
+        test_unsigned_divide(divu_inst, 4u64, 1u64, 4u64, 1u64, 2u64);
     }
 }
