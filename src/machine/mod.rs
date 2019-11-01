@@ -24,6 +24,7 @@ impl Register {
 }
 
 #[derive(Debug)]
+#[allow(non_camel_case_types)]
 enum SpecialRegister {
     rA, rB, rC, rD, rE, rF, rG, rH, rI, rJ, rK, rL, rM, rN, rO, rP, rQ, rR, rS, rT, rU, rV, rW, rX, rY, rZ,
     rBB, rTT, rWW, rXX, rYY, rZZ
@@ -268,7 +269,17 @@ macro_rules! unsigned_arith_inst {
 impl<T> Machine<T> where T: Memory {
     unsigned_arith_inst!(addu, add);
     unsigned_arith_inst!(subu, sub);
-    unsigned_arith_inst!(mulu, mul);
+
+    fn mulu(&mut self, inst: u32) {
+        let (x, y, z) = three_usize(inst);
+        let o2 = self.greg(y).get() as u128;
+        let o3 = self.greg(z).get() as u128;
+        let r = o2 * o3;
+        let r1 = r as u64;
+        let r_d = (r >> 64) as u64;
+        self.greg(x).set(r1);
+        self.spreg(SpecialRegister::rD).set(r_d);
+    }
 }
 
 fn one_operand(inst: u32) -> usize {
@@ -498,7 +509,7 @@ mod tests {
         test_signed_div(div_inst, -2i64, -2i64, 6i64, -4i64);
     }
 
-    fn test_unsigned_arith(inst: u32, expect: u64, op1: u64, op2: u64) {
+    fn test_unsigned_plus_substract(inst: u32, expect: u64, op1: u64, op2: u64) {
         let mut m = machine_for_arithmetic_test(op1, op2);
         m.execute(inst);
         let reg1 = m.greg(1).get();
@@ -508,18 +519,29 @@ mod tests {
     #[test]
     fn test_addu() {
         let addu_inst = 0x22010203u32;
-        test_unsigned_arith(addu_inst, 14u64, 8u64, 6u64);
+        test_unsigned_plus_substract(addu_inst, 14u64, 8u64, 6u64);
     }
 
     #[test]
     fn test_subu() {
         let subu_inst = 0x26010203u32;
-        test_unsigned_arith(subu_inst, 3u64, 14u64, 11u64);
+        test_unsigned_plus_substract(subu_inst, 3u64, 14u64, 11u64);
+    }
+
+    fn test_unsigned_multiply(inst: u32, expect: u128, op1: u64, op2: u64) {
+        let mut m = machine_for_arithmetic_test(op1, op2);
+        m.execute(inst);
+        let reg1 = m.greg(1).get() as u128;
+        let r_d = m.spreg(SpecialRegister::rD).get() as u128;
+        let result = (r_d << 64) | reg1;
+        assert_eq!(result, expect, "expect {:?}, found {:?}", expect, result);
     }
 
     #[test]
     fn test_mulu() {
         let mulu_inst = 0x1a010203u32;
-        test_unsigned_arith(mulu_inst, 15u64, 3u64, 5u64);
+
+        test_unsigned_multiply(mulu_inst, 15u128, 3u64, 5u64);
+        test_unsigned_multiply(mulu_inst, 551240594518494412800u128, 30u64, 18374686483949813760u64);
     }
 }
