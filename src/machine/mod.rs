@@ -91,6 +91,8 @@ impl<T> Machine<T> where T: Memory {
         register_inst!(insts, 0x2a, four_addu);
         register_inst!(insts, 0x2c, eight_addu);
         register_inst!(insts, 0x2e, sixteen_addu);
+        register_inst!(insts, 0x34, neg);
+        register_inst!(insts, 0x36, negu);
  
         Machine {
             memory,
@@ -319,6 +321,22 @@ impl<T> Machine<T> where T: Memory {
     naddu_inst!(four_addu, 4);
     naddu_inst!(eight_addu, 8);
     naddu_inst!(sixteen_addu, 16);
+
+    fn neg(&mut self, inst: u32) {
+        let (x, y, z) = three_operands(inst);
+        let op3 = self.greg(z).get() as i64;
+        let op2 = y as i64;
+        let r = op2 - op3;
+        self.greg(x).set(r as u64);
+    }
+
+    fn negu(&mut self, inst: u32) {
+        let (x, y, z) = three_operands(inst);
+        let op3 = self.greg(z).get();
+        let op2: u64 = y.into();
+        let r = op2 - op3;
+        self.greg(x).set(r);
+    }
 }
 
 fn one_operand(inst: u32) -> usize {
@@ -477,7 +495,7 @@ mod tests {
         test_st!(stco_inst, 2u64, 0x0000_0000_0000_00a0u64);
     }
 
-    fn machine_for_arithmetic_test(reg2: u64, reg3: u64) -> Machine<HashMemory> {
+    fn machine_with_two_reg(reg2: u64, reg3: u64) -> Machine<HashMemory> {
         let hm = HashMemory::new();
         let mut m = Machine::new(hm);
         
@@ -487,8 +505,13 @@ mod tests {
         m
     }
 
+    fn machine_with_one_reg(reg3: u64) -> Machine<HashMemory> {
+        // reg2 is not important, so set to 0.
+        machine_with_two_reg(0, reg3)
+    }
+
     fn test_signed_arith(inst: u32, expect: i64, op1: i64, op2: i64) {
-        let mut m = machine_for_arithmetic_test(op1 as u64, op2 as u64);
+        let mut m = machine_with_two_reg(op1 as u64, op2 as u64);
         m.execute(inst);
         let reg1 = m.greg(1).get() as i64;
         assert_eq!(reg1, expect, "expect {:?}, found {:?}", expect, reg1);
@@ -517,7 +540,7 @@ mod tests {
     }
 
     fn test_signed_div(inst: u32, expect_quotient: i64, expect_remainder: i64, op1: i64, op2: i64) {
-        let mut m = machine_for_arithmetic_test(op1 as u64, op2 as u64);
+        let mut m = machine_with_two_reg(op1 as u64, op2 as u64);
         m.execute(inst);
         let reg1 = m.greg(1).get() as i64;
         assert_eq!(reg1, expect_quotient, "expect quotient: {:?}, found {:?}", expect_quotient, reg1);
@@ -534,7 +557,7 @@ mod tests {
     }
 
     fn test_unsigned_add_substract(inst: u32, expect: u64, op1: u64, op2: u64) {
-        let mut m = machine_for_arithmetic_test(op1, op2);
+        let mut m = machine_with_two_reg(op1, op2);
         m.execute(inst);
         let reg1 = m.greg(1).get();
         assert_eq!(reg1, expect, "expect {:?}, found {:?}", expect, reg1);
@@ -553,7 +576,7 @@ mod tests {
     }
 
     fn test_unsigned_multiply(inst: u32, expect: u128, op1: u64, op2: u64) {
-        let mut m = machine_for_arithmetic_test(op1, op2);
+        let mut m = machine_with_two_reg(op1, op2);
         m.execute(inst);
         let reg1 = m.greg(1).get() as u128;
         let r_d = m.spreg(SpecialRegister::rD).get() as u128;
@@ -570,7 +593,7 @@ mod tests {
     }
 
     fn test_unsigned_divide(inst: u32, expect_r1: u64, expect_rr: u64, rd: u64, op1: u64, op2: u64) {
-        let mut m = machine_for_arithmetic_test(op1, op2);
+        let mut m = machine_with_two_reg(op1, op2);
         m.spreg(SpecialRegister::rD).set(rd);
         m.execute(inst);
         let reg1 = m.greg(1).get();
@@ -588,7 +611,7 @@ mod tests {
     }
 
     fn test_naddu(inst: u32, expect: u64, op1: u64, op2: u64) {
-        let mut m = machine_for_arithmetic_test(op1, op2);
+        let mut m = machine_with_two_reg(op1, op2);
         m.execute(inst);
         let reg1 = m.greg(1).get();
         assert_eq!(expect, reg1, "expect {:?}, found {:?}", expect, reg1);
@@ -616,5 +639,34 @@ mod tests {
     fn test_16addu() {
         let sixteen_addu_inst = 0x2e010203u32;
         test_naddu(sixteen_addu_inst, 26u64, 1u64, 10u64);
+    }
+
+    fn test_signed_negate(inst: u32, expect: i64, op3: i64) {
+        let mut m = machine_with_one_reg(op3 as u64);
+        m.execute(inst);
+        let reg1: i64 = m.greg(1).get() as i64;
+        assert_eq!(expect, reg1, "expect {:?}, found {:?}", expect, reg1);
+    }
+
+    #[test]
+    fn test_neg() {
+        let neg_inst = 0x34010003u32;
+        test_signed_negate(neg_inst, -22i64, 22i64);
+
+        let neg_inst2 = 0x34010503u32;
+        test_signed_negate(neg_inst2, -17i64 , 22i64);
+    }
+
+    fn test_unsigned_negate(inst: u32, expect: u64, op3: u64) {
+        let mut m = machine_with_one_reg(op3);
+        m.execute(inst);
+        let reg1 = m.greg(1).get();
+        assert_eq!(expect, reg1, "expect {:?}, found {:?}", expect, reg1);
+    }
+
+    #[test]
+    fn test_negu() {
+        let negu_inst = 0x3601ff03u32;
+        test_unsigned_negate(negu_inst, 2u64, 253u64);
     }
 }
