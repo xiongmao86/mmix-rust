@@ -87,6 +87,10 @@ impl<T> Machine<T> where T: Memory {
         register_inst!(insts, 0x26, subu);
         register_inst!(insts, 0x1a, mulu);
         register_inst!(insts, 0x1e, divu);
+        register_inst!(insts, 0x28, two_addu);
+        register_inst!(insts, 0x2a, four_addu);
+        register_inst!(insts, 0x2c, eight_addu);
+        register_inst!(insts, 0x2e, sixteen_addu);
  
         Machine {
             memory,
@@ -111,7 +115,7 @@ impl<T> Machine<T> where T: Memory {
 
     fn dummy_inst(&mut self, ops: u32) {
         let opcode = ops >> 24;
-        panic!("Instruction of {:?} is not added yet.", opcode);
+        panic!("Instruction of 0x{:x?} is not added yet.", opcode);
     }
 }
 
@@ -260,6 +264,18 @@ macro_rules! unsigned_arith_inst {
     }
 }
 
+macro_rules! naddu_inst {
+    ($name:ident, $n:literal) => {
+        fn $name(&mut self, inst: u32) {
+            let (x, y, z) = three_operands(inst);
+            let o2 = self.greg(y).get();
+            let o3 = self.greg(z).get();
+            let r = o2 * $n + o3;
+            self.greg(x).set(r);
+        }
+    }
+}
+
 impl<T> Machine<T> where T: Memory {
     unsigned_arith_inst!(addu, add);
     unsigned_arith_inst!(subu, sub);
@@ -298,6 +314,11 @@ impl<T> Machine<T> where T: Memory {
             self.spreg(SpecialRegister::rR).set(rr);
         }
     }
+
+    naddu_inst!(two_addu, 2);
+    naddu_inst!(four_addu, 4);
+    naddu_inst!(eight_addu, 8);
+    naddu_inst!(sixteen_addu, 16);
 }
 
 fn one_operand(inst: u32) -> usize {
@@ -564,5 +585,36 @@ mod tests {
 
         test_unsigned_divide(divu_inst, 9223372036854775809u64, 2u64, 2u64, 6u64, 4u64);
         test_unsigned_divide(divu_inst, 4u64, 1u64, 4u64, 1u64, 2u64);
+    }
+
+    fn test_naddu(inst: u32, expect: u64, op1: u64, op2: u64) {
+        let mut m = machine_for_arithmetic_test(op1, op2);
+        m.execute(inst);
+        let reg1 = m.greg(1).get();
+        assert_eq!(expect, reg1, "expect {:?}, found {:?}", expect, reg1);
+    }
+
+    #[test]
+    fn test_2addu() {
+        let two_addu_inst = 0x28010203u32;
+        test_naddu(two_addu_inst, 18u64, 4u64, 10u64);
+    }
+
+    #[test]
+    fn test_4addu() {
+        let four_addu_inst = 0x2a010203u32;
+        test_naddu(four_addu_inst, 18u64, 2u64, 10u64);
+    }
+
+    #[test]
+    fn test_8addu() {
+        let eight_addu_inst = 0x2c010203u32;
+        test_naddu(eight_addu_inst, 26u64, 2u64, 10u64);
+    }
+
+    #[test]
+    fn test_16addu() {
+        let sixteen_addu_inst = 0x2e010203u32;
+        test_naddu(sixteen_addu_inst, 26u64, 1u64, 10u64);
     }
 }
